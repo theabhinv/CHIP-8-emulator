@@ -29,7 +29,7 @@ Chip8::Chip8()
 
     while(initialized)
     {   
-        SDL_SetRenderDrawColor( _renderer, 0x90, 0xd4, 0xd6, 0xFF );
+        SDL_SetRenderDrawColor( _renderer, 0x0F, 0x0F, 0x0F, 0xFF );
         SDL_RenderClear(_renderer);
         SDL_Event* e;
         while(SDL_PollEvent(e))
