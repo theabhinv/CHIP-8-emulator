@@ -1,8 +1,8 @@
-#include "chip8.h"
+#include "chipOS.h"
 
 int main(int argc, char* argv[])
 {
-  Chip8* chip = new Chip8();
-  delete chip;
+  ChipOS* os = new ChipOS();
+  delete os;
   return 0;
 }
