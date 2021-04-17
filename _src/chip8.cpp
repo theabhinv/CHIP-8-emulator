@@ -1,8 +1,9 @@
 #include "chip8.h"
 
-Chip8::Chip8()
+Chip8::Chip8():memory{0},V{0},index(0),opcode(0),pc(START_PROG_MEM), sp(0),stack{0},delayTimer(0), soundTimer(0)
 {
     bool initialized = true;
+    pc = START_PROG_MEM;
 
     if(SDL_Init(SDL_INIT_EVERYTHING) < 0)
     {
@@ -62,3 +63,4 @@ Chip8::~Chip8()
     delete _texture;
     SDL_Quit();
 }
+
