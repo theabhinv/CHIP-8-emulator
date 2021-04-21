@@ -1,32 +1,36 @@
 #ifndef CHIP8_H
 #define CHIP8_H
-#ifndef OPCODETABLE_CPP
-#define OPCODETABLE_CPP
 
 #include <iostream>
+#include <cstring>
 #include <cstdint>
 #include <random>
 #include "SDL2/SDL.h"
+
 static const int   START_PROG_MEM = 0x200;
 static const int   END_PROG_MEM   = 0xFFF;
 static const int   X_RES          = 64;
 static const int   Y_RES          = 32;
+static const int   RES_SCALING    = 20;
 const unsigned int KEY_COUNT = 16;
 const unsigned int MEMORY_SIZE = 4096;
 const unsigned int REGISTER_COUNT = 16;
 const unsigned int STACK_LEVELS = 16;
+
 class Chip8
 {
     public:
-       Chip8();
-       ~Chip8(); 
+    Chip8();
+    ~Chip8(); 
 	   
-    private:
-
-    public:
-	uint32_t display[Y_RES * X_RES]{};
 	void Cycle();
+
+	uint32_t display[Y_RES * X_RES]{};
+
     private:
+	bool Input();
+	void clearInput();
+
 	void Table0();
 	void Table8();
 	void TableE();
@@ -154,6 +158,7 @@ class Chip8
         uint8_t     sp{};                   	// Stack Pointer
         uint16_t 	stack[STACK_LEVELS]{};     // Program Stack
         uint16_t    opcode{};
+		uint8_t     keypad[0xF];
 
 		std::default_random_engine randGen;
 		std::uniform_int_distribution<uint8_t> randByte;
@@ -167,5 +172,4 @@ class Chip8
 	Chip8Func tableF[0x65 + 1]{&Chip8::OP_NULL};
 };
 
-#endif
 #endif

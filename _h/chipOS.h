@@ -13,8 +13,7 @@
 struct File
 {
     File* parent;
-    File* children[21];
-    
+    File* children[21]{};
     char* fileName;
     size_t position;
     size_t size;
@@ -30,23 +29,26 @@ class ChipOS
         const char* EndSignature   = "LaerecZbbuhsIhba";
         const std::string FilePath = "DiskDrive.fat";
         static File* currentFile;
-        static File* allFiles[100];
         static std::fstream* disk;
         bool isRunning;
+
+        size_t METADATA_CURRENT;
+        size_t DATA_CURRENT;
+
     public:
         ChipOS();
         ~ChipOS();       
         void Cycle();
 
-        void Run(std::string filename);
-        void ShowDirectory();
-        void MoveDirectory(std::string destination);
-        void MoveFile(std::string filename, std::string destination);
-        void EditFile(std::string filename);
-        void DeleteFile(std::string filename);
-        void RenameFile(std::string filename, std::string newname);
-        void DefragDisk();
-        void ParseInstruction(std::string line);
+        void Run(std::string filename); // run
+        void ShowDirectory(); // sd
+        void MoveDirectory(std::string destination); // md
+        void LoadFile(std::string filename); // load 
+        void MoveFile(std::string filename, std::string destination); // mf
+        void EditFile(std::string filename); // ef
+        void DeleteFile(std::string filename); // rm
+        void RenameFile(std::string filename, std::string newname); // rn
+        void DefragDisk(); // defrag
         void Initialize();
         void CheckFreeSize();
         void Shutdown();
