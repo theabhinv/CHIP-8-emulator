@@ -1,5 +1,5 @@
 #OBJS specifies which files to compile as part of the project
-OBJS = _src/main.cpp _src/chip8.cpp _src/chipOS.cpp
+OBJS = _src/main.cpp _src/chip8.cpp _src/Platform.cpp
 
 #CC specifies which compiler we're using
 CC = g++

@@ -1,9 +1,53 @@
-#include "chip8.h"
+#include "Chip8.hpp"
+#include <chrono>
+#include <cstdint>
+#include <cstring>
+#include <fstream>
+#include <random>
 
-//set up table function pointer table
+
+const unsigned int FONTSET_SIZE = 80;
+const unsigned int FONTSET_START_ADDRESS = 0x50;
+const unsigned int START_ADDRESS = 0x200;
+
+
+uint8_t fontset[FONTSET_SIZE] =
+	{
+		0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+		0x20, 0x60, 0x20, 0x20, 0x70, // 1
+		0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+		0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+		0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+		0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+		0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+		0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+		0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+		0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+		0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+		0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+		0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+		0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+		0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+		0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+	};
+
+
 Chip8::Chip8()
+	: randGen(std::chrono::system_clock::now().time_since_epoch().count())
 {
-    // Set up function pointer table
+	// Initialize PC
+	pc = START_ADDRESS;
+
+	// Load fonts into memory
+	for (unsigned int i = 0; i < FONTSET_SIZE; ++i)
+	{
+		memory[FONTSET_START_ADDRESS + i] = fontset[i];
+	}
+
+	// Initialize RNG
+	randByte = std::uniform_int_distribution<uint8_t>(0, 255U);
+
+	// Set up function pointer table
 	table[0x0] = &Chip8::Table0;
 	table[0x1] = &Chip8::OP_1nnn;
 	table[0x2] = &Chip8::OP_2nnn;
@@ -46,137 +90,28 @@ Chip8::Chip8()
 	tableF[0x33] = &Chip8::OP_Fx33;
 	tableF[0x55] = &Chip8::OP_Fx55;
 	tableF[0x65] = &Chip8::OP_Fx65;
-
-	  bool initialized = true;
-
-    if(SDL_Init(SDL_INIT_EVERYTHING) < 0)
-    {
-        initialized = false;
-        return;
-    }
-    _window = SDL_CreateWindow("Chip8", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, X_RES * RES_SCALING, Y_RES * RES_SCALING, SDL_WINDOW_SHOWN);
-    if(!_window)
-    {
-        initialized = false;
-        return;
-    }
-
-    _renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_ACCELERATED);
-    if(!_renderer)
-    {
-        initialized = false;
-        return;
-    }
-
-	double delta = 0;
-	uint32_t a = 0;
-	uint32_t b = 0;
-    while(this->Input())
-    {   
-		a = SDL_GetTicks();
-    	delta = a - b;
-
-    	if (delta > 1000/60.0)
-    	{	
-			b = a;   
-
-			this->Cycle(); 
-
-			SDL_Texture *texture = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, X_RES, Y_RES);
-			Uint32 pixels[X_RES * Y_RES];
-
-			for (int i = 0; i < (64 * 32); i++)
-				pixels[i] = (display[i] == 1)?0xFF00FF00:0x00000000;
-
-			SDL_SetRenderDrawColor( _renderer, 0x0F, 0x0F, 0x0F, 0xFF );
-			SDL_RenderClear(_renderer);
-			SDL_UpdateTexture(texture, NULL, pixels, 64*4);
-			SDL_RenderCopy(_renderer, texture, NULL, NULL);
-			SDL_RenderPresent(_renderer);
-			clearInput();
-		}
-    }
 }
 
-void Chip8::clearInput()
+void Chip8::LoadROM(char const* filename)
 {
-	for(int i = 0; i < 0xF; i++)
-		keypad[i] = 0;
-}
+	std::ifstream file(filename, std::ios::binary | std::ios::ate);
 
-bool Chip8::Input()
-{
-	SDL_Event e;
-	while(SDL_PollEvent(&e))
+	if (file.is_open())
 	{
-		switch(e.type)
+		std::streampos size = file.tellg();
+		char* buffer = new char[size];
+		file.seekg(0, std::ios::beg);
+		file.read(buffer, size);
+		file.close();
+
+		for (long i = 0; i < size; ++i)
 		{
-			case SDL_QUIT:
-				return false;
-			break;
-			case SDL_KEYDOWN:
-				switch(e.key.keysym.sym)
-				{
-					case SDLK_ESCAPE:
-						return false;
-					break;
-					case SDLK_1:
-						keypad[0x1] = 1;
-					break;
-					case SDLK_2:
-						keypad[0x2] = 1;
-					break;
-					case SDLK_3:
-						keypad[0x3] = 1;
-					break;
-					case SDLK_4:
-						keypad[0xC] = 1;
-					break;
-					case SDLK_q:
-						keypad[0x4] = 1;
-					break;
-					case SDLK_w:
-						keypad[0x5] = 1;
-					break;
-					case SDLK_e:
-						keypad[0x6] = 1;
-					break;
-					case SDLK_r:
-						keypad[0xD] = 1;
-					break;
-					case SDLK_a:
-						keypad[0x7] = 1;
-					break;
-					case SDLK_s:
-						keypad[0x8] = 1;
-					break;
-					case SDLK_d:
-						keypad[0x9] = 1;
-					break;
-					case SDLK_f:
-						keypad[0xE] = 1;
-					break;
-					case SDLK_z:
-						keypad[0xA] = 1;
-					break;
-					case SDLK_x:
-						keypad[0x0] = 1;
-					break;
-					case SDLK_c:
-						keypad[0xB] = 1;
-					break;
-					case SDLK_v:
-						keypad[0xF] = 1;
-					break;
-				}
-			break;
+			memory[START_ADDRESS + i] = buffer[i];
 		}
+
+		delete[] buffer;
 	}
-	return true;
 }
-
-
-
 
 void Chip8::Cycle()
 {
@@ -200,8 +135,8 @@ void Chip8::Cycle()
 	{
 		--soundTimer;
 	}
-
 }
+
 void Chip8::Table0()
 {
 	((*this).*(table0[opcode & 0x000Fu]))();
@@ -227,7 +162,7 @@ void Chip8::OP_NULL()
 
 void Chip8::OP_00E0()
 {
-	memset(display, 0, sizeof(display));
+	memset(video, 0, sizeof(video));
 }
 
 void Chip8::OP_00EE()
@@ -257,7 +192,7 @@ void Chip8::OP_3xkk()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t byte = opcode & 0x00FFu;
 
-	if (V[Vx] == byte)
+	if (registers[Vx] == byte)
 	{
 		pc += 2;
 	}
@@ -268,7 +203,7 @@ void Chip8::OP_4xkk()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t byte = opcode & 0x00FFu;
 
-	if (V[Vx] != byte)
+	if (registers[Vx] != byte)
 	{
 		pc += 2;
 	}
@@ -279,7 +214,7 @@ void Chip8::OP_5xy0()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
 
-	if (V[Vx] == V[Vy])
+	if (registers[Vx] == registers[Vy])
 	{
 		pc += 2;
 	}
@@ -290,7 +225,7 @@ void Chip8::OP_6xkk()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t byte = opcode & 0x00FFu;
 
-	V[Vx] = byte;
+	registers[Vx] = byte;
 }
 
 void Chip8::OP_7xkk()
@@ -298,7 +233,7 @@ void Chip8::OP_7xkk()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t byte = opcode & 0x00FFu;
 
-	V[Vx] += byte;
+	registers[Vx] += byte;
 }
 
 void Chip8::OP_8xy0()
@@ -306,7 +241,7 @@ void Chip8::OP_8xy0()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
 
-	V[Vx] = V[Vy];
+	registers[Vx] = registers[Vy];
 }
 
 void Chip8::OP_8xy1()
@@ -314,7 +249,7 @@ void Chip8::OP_8xy1()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
 
-	V[Vx] |= V[Vy];
+	registers[Vx] |= registers[Vy];
 }
 
 void Chip8::OP_8xy2()
@@ -322,7 +257,7 @@ void Chip8::OP_8xy2()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
 
-	V[Vx] &= V[Vy];
+	registers[Vx] &= registers[Vy];
 }
 
 void Chip8::OP_8xy3()
@@ -330,7 +265,7 @@ void Chip8::OP_8xy3()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
 
-	V[Vx] ^= V[Vy];
+	registers[Vx] ^= registers[Vy];
 }
 
 void Chip8::OP_8xy4()
@@ -338,18 +273,18 @@ void Chip8::OP_8xy4()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
 
-	uint16_t sum = V[Vx] + V[Vy];
+	uint16_t sum = registers[Vx] + registers[Vy];
 
 	if (sum > 255U)
 	{
-		V[0xF] = 1;
+		registers[0xF] = 1;
 	}
 	else
 	{
-		V[0xF] = 0;
+		registers[0xF] = 0;
 	}
 
-	V[Vx] = sum & 0xFFu;
+	registers[Vx] = sum & 0xFFu;
 }
 
 void Chip8::OP_8xy5()
@@ -357,16 +292,16 @@ void Chip8::OP_8xy5()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
 
-	if (V[Vx] > V[Vy])
+	if (registers[Vx] > registers[Vy])
 	{
-		V[0xF] = 1;
+		registers[0xF] = 1;
 	}
 	else
 	{
-		V[0xF] = 0;
+		registers[0xF] = 0;
 	}
 
-	V[Vx] -= V[Vy];
+	registers[Vx] -= registers[Vy];
 }
 
 void Chip8::OP_8xy6()
@@ -374,9 +309,9 @@ void Chip8::OP_8xy6()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
 	// Save LSB in VF
-	V[0xF] = (V[Vx] & 0x1u);
+	registers[0xF] = (registers[Vx] & 0x1u);
 
-	V[Vx] >>= 1;
+	registers[Vx] >>= 1;
 }
 
 void Chip8::OP_8xy7()
@@ -384,16 +319,16 @@ void Chip8::OP_8xy7()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
 
-	if (V[Vy] > V[Vx])
+	if (registers[Vy] > registers[Vx])
 	{
-		V[0xF] = 1;
+		registers[0xF] = 1;
 	}
 	else
 	{
-		V[0xF] = 0;
+		registers[0xF] = 0;
 	}
 
-	V[Vx] = V[Vy] - V[Vx];
+	registers[Vx] = registers[Vy] - registers[Vx];
 }
 
 void Chip8::OP_8xyE()
@@ -401,9 +336,9 @@ void Chip8::OP_8xyE()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
 	// Save MSB in VF
-	V[0xF] = (V[Vx] & 0x80u) >> 7u;
+	registers[0xF] = (registers[Vx] & 0x80u) >> 7u;
 
-	V[Vx] <<= 1;
+	registers[Vx] <<= 1;
 }
 
 void Chip8::OP_9xy0()
@@ -411,7 +346,7 @@ void Chip8::OP_9xy0()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
 
-	if (V[Vx] != V[Vy])
+	if (registers[Vx] != registers[Vy])
 	{
 		pc += 2;
 	}
@@ -428,7 +363,7 @@ void Chip8::OP_Bnnn()
 {
 	uint16_t address = opcode & 0x0FFFu;
 
-	pc = V[0] + address;
+	pc = registers[0] + address;
 }
 
 void Chip8::OP_Cxkk()
@@ -436,7 +371,7 @@ void Chip8::OP_Cxkk()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t byte = opcode & 0x00FFu;
 
-	V[Vx] = randByte(randGen) & byte;
+	registers[Vx] = randByte(randGen) & byte;
 }
 
 void Chip8::OP_Dxyn()
@@ -444,72 +379,176 @@ void Chip8::OP_Dxyn()
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
 	uint8_t height = opcode & 0x000Fu;
+
+	// Wrap if going beyond screen boundaries
+	uint8_t xPos = registers[Vx] % VIDEO_WIDTH;
+	uint8_t yPos = registers[Vy] % VIDEO_HEIGHT;
+
+	registers[0xF] = 0;
+
+	for (unsigned int row = 0; row < height; ++row)
+	{
+		uint8_t spriteByte = memory[index + row];
+
+		for (unsigned int col = 0; col < 8; ++col)
+		{
+			uint8_t spritePixel = spriteByte & (0x80u >> col);
+			uint32_t* screenPixel = &video[(yPos + row) * VIDEO_WIDTH + (xPos + col)];
+
+			// Sprite pixel is on
+			if (spritePixel)
+			{
+				// Screen pixel also on - collision
+				if (*screenPixel == 0xFFFFFFFF)
+				{
+					registers[0xF] = 1;
+				}
+
+				// Effectively XOR with the sprite pixel
+				*screenPixel ^= 0xFFFFFFFF;
+			}
+		}
+	}
 }
 
 void Chip8::OP_Ex9E()
 {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
-	uint8_t key = V[Vx];
+	uint8_t key = registers[Vx];
 
-	
+	if (keypad[key])
+	{
+		pc += 2;
+	}
 }
 
 void Chip8::OP_ExA1()
 {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
-	uint8_t key = V[Vx];
+	uint8_t key = registers[Vx];
 
-	
+	if (!keypad[key])
+	{
+		pc += 2;
+	}
 }
 
 void Chip8::OP_Fx07()
 {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
-	V[Vx] = delayTimer;
+	registers[Vx] = delayTimer;
 }
 
 void Chip8::OP_Fx0A()
 {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
-	
+	if (keypad[0])
+	{
+		registers[Vx] = 0;
+	}
+	else if (keypad[1])
+	{
+		registers[Vx] = 1;
+	}
+	else if (keypad[2])
+	{
+		registers[Vx] = 2;
+	}
+	else if (keypad[3])
+	{
+		registers[Vx] = 3;
+	}
+	else if (keypad[4])
+	{
+		registers[Vx] = 4;
+	}
+	else if (keypad[5])
+	{
+		registers[Vx] = 5;
+	}
+	else if (keypad[6])
+	{
+		registers[Vx] = 6;
+	}
+	else if (keypad[7])
+	{
+		registers[Vx] = 7;
+	}
+	else if (keypad[8])
+	{
+		registers[Vx] = 8;
+	}
+	else if (keypad[9])
+	{
+		registers[Vx] = 9;
+	}
+	else if (keypad[10])
+	{
+		registers[Vx] = 10;
+	}
+	else if (keypad[11])
+	{
+		registers[Vx] = 11;
+	}
+	else if (keypad[12])
+	{
+		registers[Vx] = 12;
+	}
+	else if (keypad[13])
+	{
+		registers[Vx] = 13;
+	}
+	else if (keypad[14])
+	{
+		registers[Vx] = 14;
+	}
+	else if (keypad[15])
+	{
+		registers[Vx] = 15;
+	}
+	else
+	{
+		pc -= 2;
+	}
 }
 
 void Chip8::OP_Fx15()
 {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
+	delayTimer = registers[Vx];
 }
 
 void Chip8::OP_Fx18()
 {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
-	
+	soundTimer = registers[Vx];
 }
 
 void Chip8::OP_Fx1E()
 {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
-	index += V[Vx];
+	index += registers[Vx];
 }
 
 void Chip8::OP_Fx29()
 {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
-	uint8_t digit = V[Vx];
+	uint8_t digit = registers[Vx];
 
-	
+	index = FONTSET_START_ADDRESS + (5 * digit);
 }
 
 void Chip8::OP_Fx33()
 {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
-	uint8_t value = V[Vx];
+	uint8_t value = registers[Vx];
 
 	// Ones-place
 	memory[index + 2] = value % 10;
@@ -529,7 +568,7 @@ void Chip8::OP_Fx55()
 
 	for (uint8_t i = 0; i <= Vx; ++i)
 	{
-		memory[index + i] = V[i];
+		memory[index + i] = registers[i];
 	}
 }
 
@@ -539,18 +578,6 @@ void Chip8::OP_Fx65()
 
 	for (uint8_t i = 0; i <= Vx; ++i)
 	{
-		V[i] = memory[index + i];
+		registers[i] = memory[index + i];
 	}
-}
-
-
-Chip8::~Chip8()
-{
-    SDL_DestroyWindow(_window);
-    delete _window;
-    SDL_DestroyRenderer(_renderer);
-    delete _renderer;
-    SDL_DestroyTexture(_texture);
-    delete _texture;
-    SDL_Quit();
 }
